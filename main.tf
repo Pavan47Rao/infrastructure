@@ -1,39 +1,3 @@
-variable "awsRegion" {
-    type = string
-}
-
-variable "vpcCIDR" {
-    type = string
-}
-
-variable "subnet1CIDR" {
-    type = string
-}
-
-variable "subnet2CIDR" {
-    type = string
-}
-
-variable "subnet3CIDR" {
-    type = string
-}
-
-variable "subnet1AZ" {
-    type = string
-}
-
-variable "subnet2AZ" {
-    type = string
-}
-
-variable "subnet3AZ" {
-    type = string
-}
-
-variable "routeTableCIDR" {
-    type = string
-}
-
 provider "aws" {
     region = var.awsRegion
 }
@@ -45,7 +9,7 @@ resource "aws_vpc" "csye6225_demo_vpc" {
     enable_classiclink_dns_support = true
     assign_generated_ipv6_cidr_block = false
     tags = {
-        Name = "csye6225_demo_vpc"
+        Name = var.vpcTagName
     }
 }
 
@@ -55,7 +19,7 @@ resource "aws_subnet" "subnet1" {
     availability_zone = var.subnet1AZ
     map_public_ip_on_launch = true
     tags = {
-        Name = "subnet1"
+        Name = var.subnet1TagName
     }
 }
 
@@ -65,7 +29,7 @@ resource "aws_subnet" "subnet2" {
     availability_zone = var.subnet2AZ
     map_public_ip_on_launch = true
     tags = {
-        Name = "subnet2"
+        Name = var.subnet2TagName
     }
 }
 resource "aws_subnet" "subnet3" {
@@ -74,7 +38,7 @@ resource "aws_subnet" "subnet3" {
     availability_zone = var.subnet3AZ
     map_public_ip_on_launch = true
     tags = {
-        Name = "subnet3"
+        Name = var.subnet3TagName
     }
 }
 
@@ -82,7 +46,7 @@ resource "aws_internet_gateway" "gateway_for_csye6225_demo_vpc" {
   vpc_id = aws_vpc.csye6225_demo_vpc.id
 
   tags = {
-    Name = "gateway_for_csye6225_demo_vpc"
+    Name = var.internetGatewayTagName
   }
 }
 
@@ -95,7 +59,7 @@ resource "aws_route_table" "route_table_for_3_subnets" {
   }
 
   tags = {
-    Name = "route_table_for_3_subnets"
+    Name = var.routeTableTagName
   }
 }
 
