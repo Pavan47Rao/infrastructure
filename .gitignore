@@ -1,6 +1,8 @@
 # generated terraform plugins
 .terraform
 
-# state generated after each plan
-terraform.tfstate
-terraform.tfstate.backup
+# state generated after each plan per workspace
+terraform.tfstate.d
+
+# variables containing values for infrastructure
+vars.tf

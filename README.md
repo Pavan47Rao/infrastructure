@@ -21,6 +21,14 @@ Follow below steps in order to use the AWS Terraform to create a scalable cloud 
 | var.subnet3AZ | us-east-1a |
 | var.subnet3CIDR | 10.0.3.0/24 |
 | var.vpcCIDR | 10.0.0.0/16 |
+| var.internetGatewayTagName | gateway_for_csye6225_demo_vpc |
+| var.routeTableTagName | route_table_for_3_subnets |
+| var.subnet1TagName | subnet1 |
+| subnet2TagName | subnet2 |
+| subnet3TagName | subnet3 |
+| vpcTagName | csye6225_demo_vpc |
+
+If not prompted, default values has to be provided in vars.tf
 
 3. Apply the resources on to the infrastructure using
 `terraform apply`
