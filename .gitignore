@@ -5,6 +5,7 @@
 # state generated after each plan per workspace
 terraform.tfstate
 terraform.tfstate.backup
+terraform.tfstate.d
 
 # variables containing values for infrastructure
 vars.tf
