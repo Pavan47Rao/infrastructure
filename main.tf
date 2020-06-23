@@ -190,11 +190,6 @@ resource "aws_security_group" "database" {
     }
 }
 
-resource "aws_kms_key" "mykey" {
-  description             = "This key is used to encrypt bucket objects"
-  deletion_window_in_days = 10
-}
-
 resource "aws_s3_bucket" "webappBucket" {
   bucket = "webapp.pavan.rao"
   acl    = "private"
@@ -220,8 +215,7 @@ resource "aws_s3_bucket" "webappBucket" {
   server_side_encryption_configuration {
     rule {
       apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.mykey.arn
-        sse_algorithm     = "aws:kms"
+        sse_algorithm     = "AES256"
       }
     }
   }
@@ -263,43 +257,6 @@ resource "aws_db_instance" "csye6225" {
   vpc_security_group_ids = [aws_security_group.database.id]
   final_snapshot_identifier = "dbinstance1-final-snapshot"
   skip_final_snapshot       = "true"
-}
-
-resource "aws_key_pair" "web_application_key" {
-  key_name   = "web-application-key"
-  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCyqaBI/zmFlJJbuxVpI3UPAmtjaB+/+TevbosjFewkjl1k637o5LDKIPGKgOb+TJO4WvpPgfdiUps6UDOGrlNdU0i88rusv+LPasleYrA8/CzNYQIPMtzLL4i4GzjJU1OKWKiIbPQ1gNBcc407RwCAAgIBAtSM8J5fK21Z+ua8JAbutnxJMz0EkDhE4N+AEbRpM4U20rbT6O3ZdPzStFdC5zJZw5T3FGVOEB2eEpeD6IG7/+IHKEhNckE1z/DhCoIf/RWqlN0E6i1v+/9/zyN5sScKmM5ux0a7/AKCC7z7/EPuF/wDSXFGxruUJaI+hWhmGxDcf14j80+jRxiKripN pavanrao@Priyankas-MacBook-Air.local"
-}
-
-resource "aws_instance" "web" {
-  ami           = var.ami
-  instance_type = "t2.micro"
-  vpc_security_group_ids = [aws_security_group.application.id]
-  disable_api_termination = false
-  instance_initiated_shutdown_behavior = "stop"
-  subnet_id   = aws_subnet.subnet1.id
-  key_name = aws_key_pair.web_application_key.key_name
-  
-  root_block_device {
-    volume_size = 20
-    volume_type = "gp2"
-  }
-
-  tags = {
-    Name = "Web App Instance"
-  }
-
-  user_data = <<-EOF
-                #!/bin/bash
-                cd /home/ubuntu
-                sudo echo APPLICATION_ENV=prod >> .env
-                sudo echo RDS_DATABASE_NAME=${aws_db_instance.csye6225.name} >> .env
-                sudo echo RDS_USERNAME=${aws_db_instance.csye6225.username} >> .env
-                sudo echo RDS_PASSWORD=${aws_db_instance.csye6225.password} >> .env
-                sudo echo RDS_HOSTNAME=${aws_db_instance.csye6225.address} >> .env
-                sudo echo S3_BUCKET_NAME=${aws_s3_bucket.webappBucket.bucket} >> .env
-                chmod 777 .env
-                
-  EOF
 }
 
 resource "aws_dynamodb_table" "csye6225" {
@@ -366,4 +323,44 @@ resource "aws_iam_role" "EC2_CSYE6225" {
 resource "aws_iam_role_policy_attachment" "EC2-CSYE6225_WebAppS3" {
   role       = aws_iam_role.EC2_CSYE6225.name
   policy_arn = aws_iam_policy.WebAppS3.arn
+}
+
+resource "aws_iam_instance_profile" "s3_profile" {
+  name = "s3_profile_for_webapp"
+  role = aws_iam_role.EC2_CSYE6225.name
+}
+
+resource "aws_instance" "web" {
+  ami           = var.ami
+  instance_type = "t2.micro"
+  vpc_security_group_ids = [aws_security_group.application.id]
+  disable_api_termination = false
+  instance_initiated_shutdown_behavior = "stop"
+  subnet_id   = aws_subnet.subnet1.id
+  key_name = var.keyPair
+  iam_instance_profile = aws_iam_instance_profile.s3_profile.name
+  
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp2"
+  }
+
+  tags = {
+    Name = "Web App Instance"
+  }
+
+  user_data = <<-EOF
+                #!/bin/bash
+                cd /home/ubuntu
+                sudo echo APPLICATION_ENV=prod >> .env
+                sudo echo RDS_DATABASE_NAME=${aws_db_instance.csye6225.name} >> .env
+                sudo echo RDS_USERNAME=${aws_db_instance.csye6225.username} >> .env
+                sudo echo RDS_PASSWORD=${aws_db_instance.csye6225.password} >> .env
+                sudo echo RDS_HOSTNAME=${aws_db_instance.csye6225.address} >> .env
+                sudo echo S3_BUCKET_NAME=${aws_s3_bucket.webappBucket.bucket} >> .env
+                sudo echo secretAccessKey=${var.secretAccessKey} >> .env
+                sudo echo accessKeyId=${var.accessKey} >> .env
+                chmod 765 .env
+                
+  EOF
 }
