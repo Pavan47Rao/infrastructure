@@ -582,8 +582,6 @@ resource "aws_instance" "web" {
                 sudo echo RDS_PASSWORD=${aws_db_instance.csye6225.password} >> data.txt
                 sudo echo RDS_HOSTNAME=${aws_db_instance.csye6225.address} >> data.txt
                 sudo echo S3_BUCKET_NAME=${aws_s3_bucket.webappBucket.bucket} >> data.txt
-                sudo echo secretAccessKey=${var.secretAccessKey} >> data.txt
-                sudo echo accessKeyId=${var.accessKey} >> data.txt
                 
   EOF
 }
