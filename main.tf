@@ -191,7 +191,7 @@ resource "aws_security_group" "database" {
 }
 
 resource "aws_s3_bucket" "webappBucket" {
-  bucket = "webappp.pavan.rao"
+  bucket = "webapp.pavan.rao"
   acl    = "private"
   force_destroy = true
   lifecycle_rule {
