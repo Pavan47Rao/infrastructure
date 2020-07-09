@@ -521,6 +521,11 @@ resource "aws_iam_role_policy_attachment" "CodeDeployEC2ServiceRole_ec2_s3_polic
   policy_arn = aws_iam_policy.ec2_s3_policy.arn
 }
 
+resource "aws_iam_role_policy_attachment" "CodeDeployEC2ServiceRole_CloudWatchAgentServer_policy" {
+  role       = aws_iam_role.CodeDeployEC2ServiceRole.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 resource "aws_iam_role" "CodeDeployServiceRole" {
   name = "CodeDeployServiceRole"
   path = "/"
