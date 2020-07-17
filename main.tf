@@ -77,9 +77,9 @@ resource "aws_route_table_association" "association_for_subnet3" {
   route_table_id = aws_route_table.route_table_for_3_subnets.id
 }
 
-resource "aws_security_group" "application" {
-  name        = "application"
-  description = "Security group for EC2 instance"
+resource "aws_security_group" "lb_security_grp" {
+  name        = "lb_security_grp"
+  description = "Security group for load balancer"
   vpc_id      = aws_vpc.csye6225_demo_vpc.id
 
   ingress {
@@ -169,6 +169,65 @@ resource "aws_security_group" "application" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  tags = {
+    Name = "application"
+  }
+}
+
+resource "aws_security_group" "application" {
+  name        = "application"
+  description = "security group for ec2 instance"
+  vpc_id      = aws_vpc.csye6225_demo_vpc.id
+
+
+  ingress {
+    description = "ssh"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    security_groups = ["${aws_security_group.lb_security_grp.id}"]
+  }
+
+  ingress {
+    description = "http"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    security_groups = ["${aws_security_group.lb_security_grp.id}"]
+  }
+
+  ingress {
+    description = "https"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    security_groups = ["${aws_security_group.lb_security_grp.id}"]
+  }
+
+  ingress {
+    description = "frontend"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    security_groups = ["${aws_security_group.lb_security_grp.id}"]
+  }
+
+
+  ingress {
+    description = "backend"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    security_groups = ["${aws_security_group.lb_security_grp.id}"]
+  }
+
+
+ egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
   tags = {
     Name = "application"
   }
@@ -708,7 +767,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_alarm_low" {
 resource "aws_lb" "LoadBalancer" {
   name               = "LoadBalancer"
   load_balancer_type = "application"
-  security_groups    = ["${aws_security_group.application.id}"]
+  security_groups    = ["${aws_security_group.lb_security_grp.id}"]
   subnets            = [aws_subnet.subnet1.id, aws_subnet.subnet2.id]
 
   enable_deletion_protection = false
