@@ -227,13 +227,9 @@ resource "aws_s3_bucket" "webappBucket" {
   }
 }
 
-data "aws_subnet_ids" "list" {
-  vpc_id = aws_vpc.csye6225_demo_vpc.id
-}
-
 resource "aws_db_subnet_group" "subnet_group_for_rds_instance" {
   name       = "subnet_group_for_rds_instance"
-  subnet_ids = ["${element(tolist(data.aws_subnet_ids.list.ids), 0)}", "${element(tolist(data.aws_subnet_ids.list.ids), 1)}"]
+  subnet_ids = [aws_subnet.subnet1.id, aws_subnet.subnet2.id]
 
   tags = {
     Name = "subnet_group_for_rds_instance"
@@ -559,36 +555,51 @@ resource "aws_iam_instance_profile" "s3_profile" {
   role = aws_iam_role.CodeDeployEC2ServiceRole.name
 }
 
-resource "aws_instance" "web" {
-  ami           = var.ami
-  instance_type = "t2.micro"
-  vpc_security_group_ids = [aws_security_group.application.id]
-  disable_api_termination = false
-  instance_initiated_shutdown_behavior = "stop"
-  subnet_id   = aws_subnet.subnet1.id
-  key_name = var.keyPair
-  iam_instance_profile = aws_iam_instance_profile.s3_profile.name
+# resource "aws_instance" "web" {
+#   ami           = var.ami
+#   instance_type = "t2.micro"
+#   vpc_security_group_ids = [aws_security_group.application.id]
+#   disable_api_termination = false
+#   instance_initiated_shutdown_behavior = "stop"
+#   subnet_id   = aws_subnet.subnet1.id
+#   key_name = var.keyPair
+#   iam_instance_profile = aws_iam_instance_profile.s3_profile.name
   
-  root_block_device {
-    volume_size = 20
-    volume_type = "gp2"
-  }
+#   root_block_device {
+#     volume_size = 20
+#     volume_type = "gp2"
+#   }
 
-  tags = {
-    Name = "Web App Instance"
-  }
+#   tags = {
+#     Name = "Web App Instance"
+#   }
 
-  user_data = <<-EOF
-                #!/bin/bash
-                sudo touch data.txt
-                sudo echo APPLICATION_ENV=prod >> data.txt
-                sudo echo RDS_DATABASE_NAME=${aws_db_instance.csye6225.name} >> data.txt
-                sudo echo RDS_USERNAME=${aws_db_instance.csye6225.username} >> data.txt
-                sudo echo RDS_PASSWORD=${aws_db_instance.csye6225.password} >> data.txt
-                sudo echo RDS_HOSTNAME=${aws_db_instance.csye6225.address} >> data.txt
-                sudo echo S3_BUCKET_NAME=${aws_s3_bucket.webappBucket.bucket} >> data.txt
+#   user_data = <<-EOF
+#                 #!/bin/bash
+#                 sudo touch data.txt
+#                 sudo echo APPLICATION_ENV=prod >> data.txt
+#                 sudo echo RDS_DATABASE_NAME=${aws_db_instance.csye6225.name} >> data.txt
+#                 sudo echo RDS_USERNAME=${aws_db_instance.csye6225.username} >> data.txt
+#                 sudo echo RDS_PASSWORD=${aws_db_instance.csye6225.password} >> data.txt
+#                 sudo echo RDS_HOSTNAME=${aws_db_instance.csye6225.address} >> data.txt
+#                 sudo echo S3_BUCKET_NAME=${aws_s3_bucket.webappBucket.bucket} >> data.txt
                 
-  EOF
+#   EOF
+# }
+
+
+resource "aws_autoscaling_group" "webapp_asg" {
+  name                 = "webapp_asg"
+  launch_configuration = aws_launch_configuration.asg_launch_config.name
+  min_size             = 2
+  max_size             = 5
+  desired_capacity = 2
+  default_cooldown = 60
+  vpc_zone_identifier  = [aws_subnet.subnet1.id]
+  target_group_arns = [aws_lb_target_group.lb_target_group.arn, aws_lb_target_group.lb_target_group_2.arn]
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
@@ -596,6 +607,7 @@ resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
   deployment_group_name = "csye6225-webapp-deployment"
   deployment_config_name = "CodeDeployDefault.AllAtOnce"
   service_role_arn      = aws_iam_role.CodeDeployServiceRole.arn
+  autoscaling_groups = ["webapp_asg"]
 
   ec2_tag_set {
     ec2_tag_filter {
@@ -618,5 +630,137 @@ resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
   alarm_configuration {
     alarms  = ["my-alarm-name"]
     enabled = true
+  }
+}
+
+resource "aws_launch_configuration" "asg_launch_config" {
+  name_prefix   = "asg_launch_config"
+  image_id      = var.ami
+  instance_type = "t2.micro"
+  key_name = var.keyPair
+  associate_public_ip_address = true
+  user_data = <<-EOF
+                #!/bin/bash
+                sudo touch data.txt
+                sudo echo APPLICATION_ENV=prod >> data.txt
+                sudo echo RDS_DATABASE_NAME=${aws_db_instance.csye6225.name} >> data.txt
+                sudo echo RDS_USERNAME=${aws_db_instance.csye6225.username} >> data.txt
+                sudo echo RDS_PASSWORD=${aws_db_instance.csye6225.password} >> data.txt
+                sudo echo RDS_HOSTNAME=${aws_db_instance.csye6225.address} >> data.txt
+                sudo echo S3_BUCKET_NAME=${aws_s3_bucket.webappBucket.bucket} >> data.txt
+                
+  EOF
+  iam_instance_profile = aws_iam_instance_profile.s3_profile.name
+  security_groups = [aws_security_group.application.id]
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_autoscaling_policy" "web_server_scale_up_policy" {
+  name                   = "web_server_scale_up_policy"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = aws_autoscaling_group.webapp_asg.name
+}
+
+resource "aws_autoscaling_policy" "web_server_scale_down_policy" {
+  name                   = "web_server_scale_down_policy"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = aws_autoscaling_group.webapp_asg.name
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_alarm_high" {
+  alarm_name                = "cpu_alarm_high"
+  comparison_operator       = "GreaterThanThreshold"
+  evaluation_periods        = "2"
+  metric_name               = "CPUUtilization"
+  namespace                 = "AWS/EC2"
+  period                    = "120"
+  statistic                 = "Average"
+  threshold                 = "5"
+  alarm_description         = "Scale-up if CPU > 90% for 2 minutes"
+  dimensions = {
+    AutoScalingGroupName = "${aws_autoscaling_group.webapp_asg.name}"
+  }
+  alarm_actions     = [aws_autoscaling_policy.web_server_scale_up_policy.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_alarm_low" {
+  alarm_name                = "cpu_alarm_low"
+  comparison_operator       = "LessThanThreshold"
+  evaluation_periods        = "2"
+  metric_name               = "CPUUtilization"
+  namespace                 = "AWS/EC2"
+  period                    = "120"
+  statistic                 = "Average"
+  threshold                 = "3"
+  alarm_description         = "Scale-down if CPU < 70% for 2 minutes"
+  dimensions = {
+    AutoScalingGroupName = "${aws_autoscaling_group.webapp_asg.name}"
+  }
+  alarm_actions     = [aws_autoscaling_policy.web_server_scale_down_policy.arn]
+}
+
+resource "aws_lb" "LoadBalancer" {
+  name               = "LoadBalancer"
+  load_balancer_type = "application"
+  security_groups    = ["${aws_security_group.application.id}"]
+  subnets            = [aws_subnet.subnet1.id, aws_subnet.subnet2.id]
+
+  enable_deletion_protection = false
+
+  tags = {
+    Environment = "production"
+  }
+}
+
+resource "aws_lb_target_group" "lb_target_group" {
+  name     = "lbtargetgp"
+  port     = "3000"
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.csye6225_demo_vpc.id
+  target_type = "instance"
+}
+
+resource "aws_lb_listener" "front_end" {
+  load_balancer_arn = aws_lb.LoadBalancer.arn
+  port              = "80"
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lb_target_group.arn
+  }
+}
+
+resource "aws_lb_target_group" "lb_target_group_2" {
+  name     = "lbtargetgp2"
+  port     = "8080"
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.csye6225_demo_vpc.id
+  target_type = "instance"
+}
+
+resource "aws_lb_listener" "back_end" {
+  load_balancer_arn = aws_lb.LoadBalancer.arn
+  port              = "8080"
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lb_target_group_2.arn
+  }
+}
+
+resource "aws_route53_record" "www" {
+  zone_id = var.zoneId
+  name    = var.domainName
+  type    = "A"
+  alias {
+    name                   = aws_lb.LoadBalancer.dns_name
+    zone_id                = aws_lb.LoadBalancer.zone_id
+    evaluate_target_health = true
   }
 }
