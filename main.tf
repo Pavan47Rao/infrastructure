@@ -308,6 +308,7 @@ resource "aws_db_instance" "csye6225" {
   vpc_security_group_ids = [aws_security_group.database.id]
   final_snapshot_identifier = "dbinstance1-final-snapshot"
   skip_final_snapshot       = "true"
+  storage_encrupted = "true"
 }
 
 resource "aws_dynamodb_table" "csye6225" {
