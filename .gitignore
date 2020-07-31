@@ -9,3 +9,5 @@ terraform.tfstate.d
 
 # variables containing values for infrastructure
 vars.tf
+cert.pem
+key.pem

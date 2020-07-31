@@ -83,14 +83,6 @@ resource "aws_security_group" "lb_security_grp" {
   vpc_id      = aws_vpc.csye6225_demo_vpc.id
 
   ingress {
-    description = "ssh"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
     description = "https"
     from_port   = 443
     to_port     = 443
@@ -120,14 +112,6 @@ resource "aws_security_group" "lb_security_grp" {
     to_port     = 8080
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "ssh"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    ipv6_cidr_blocks = ["::/0"]
   }
 
   ingress {
@@ -179,15 +163,6 @@ resource "aws_security_group" "application" {
   description = "security group for ec2 instance"
   vpc_id      = aws_vpc.csye6225_demo_vpc.id
 
-
-  ingress {
-    description = "ssh"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    security_groups = ["${aws_security_group.lb_security_grp.id}"]
-  }
-
   ingress {
     description = "http"
     from_port   = 80
@@ -210,6 +185,15 @@ resource "aws_security_group" "application" {
     to_port     = 3000
     protocol    = "tcp"
     security_groups = ["${aws_security_group.lb_security_grp.id}"]
+  }
+
+  ingress {
+    description = "ssh"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    security_groups = ["${aws_security_group.lb_security_grp.id}"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
 
@@ -295,16 +279,28 @@ resource "aws_db_subnet_group" "subnet_group_for_rds_instance" {
   }
 }
 
+resource "aws_db_parameter_group" "params" {
+name = "mysql-parameters-new"
+family = "mysql8.0"
+description = "mysql parameter group"
+
+parameter {
+    name         = "performance_schema"
+    value        = "1"
+    apply_method = "pending-reboot"
+  }
+}
+
 resource "aws_db_instance" "csye6225" {
   allocated_storage    = 20
   storage_type         = "gp2"
   engine               = "mysql"
-  engine_version       = "5.7"
+  engine_version       = "8.0"
   instance_class       = "db.t3.micro"
   name                 = "csye6225"
   username             = var.rdsUserName
   password             = var.rdsPassword
-  parameter_group_name = "default.mysql5.7"
+  parameter_group_name = aws_db_parameter_group.params.name
   multi_az                  = false
   identifier                = "csye6225-su2020"
   db_subnet_group_name      = aws_db_subnet_group.subnet_group_for_rds_instance.name
@@ -671,7 +667,7 @@ resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
   deployment_group_name = "csye6225-webapp-deployment"
   deployment_config_name = "CodeDeployDefault.AllAtOnce"
   service_role_arn      = aws_iam_role.CodeDeployServiceRole.arn
-  autoscaling_groups = ["webapp_asg"]
+  autoscaling_groups = ["${aws_autoscaling_group.webapp_asg.name}"]
 
   ec2_tag_set {
     ec2_tag_filter {
@@ -796,32 +792,12 @@ resource "aws_lb_target_group" "lb_target_group" {
   target_type = "instance"
 }
 
-resource "aws_lb_listener" "front_end" {
-  load_balancer_arn = aws_lb.LoadBalancer.arn
-  port              = "80"
-  protocol          = "HTTP"
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.lb_target_group.arn
-  }
-}
-
 resource "aws_lb_target_group" "lb_target_group_2" {
   name     = "lbtargetgp2"
   port     = "8080"
   protocol = "HTTP"
   vpc_id   = aws_vpc.csye6225_demo_vpc.id
   target_type = "instance"
-}
-
-resource "aws_lb_listener" "back_end" {
-  load_balancer_arn = aws_lb.LoadBalancer.arn
-  port              = "8080"
-  protocol          = "HTTP"
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.lb_target_group_2.arn
-  }
 }
 
 resource "aws_route53_record" "www" {
@@ -1034,6 +1010,33 @@ resource "aws_iam_role_policy_attachment" "topic_policy_attach_role" {
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_dynamo_policy" {
- role       = "${aws_iam_role.CodeDeployLambdaServiceRole.name}"
+ role       = aws_iam_role.CodeDeployLambdaServiceRole.name
  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+}
+
+resource "aws_acm_certificate" "cert" {
+  private_key      = file("key.pem")
+  certificate_body = file("cert.pem")
+}
+
+resource "aws_lb_listener" "https_access" {
+  load_balancer_arn = aws_lb.LoadBalancer.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  certificate_arn = aws_acm_certificate.cert.arn
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lb_target_group.arn
+  }
+}
+
+resource "aws_lb_listener" "back_end" {
+  load_balancer_arn = aws_lb.LoadBalancer.arn
+  port              = "8080"
+  protocol          = "HTTPS"
+  certificate_arn = aws_acm_certificate.cert.arn
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lb_target_group_2.arn
+  }
 }
