@@ -308,7 +308,7 @@ resource "aws_db_instance" "csye6225" {
   vpc_security_group_ids = [aws_security_group.database.id]
   final_snapshot_identifier = "dbinstance1-final-snapshot"
   skip_final_snapshot       = "true"
-  storage_encrupted = "true"
+  storage_encrypted = "true"
 }
 
 resource "aws_dynamodb_table" "csye6225" {
@@ -748,7 +748,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_alarm_high" {
   namespace                 = "AWS/EC2"
   period                    = "120"
   statistic                 = "Average"
-  threshold                 = "5"
+  threshold                 = "50"
   alarm_description         = "Scale-up if CPU > 90% for 2 minutes"
   dimensions = {
     AutoScalingGroupName = "${aws_autoscaling_group.webapp_asg.name}"
@@ -1015,16 +1015,11 @@ resource "aws_iam_role_policy_attachment" "lambda_dynamo_policy" {
  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
 }
 
-resource "aws_acm_certificate" "cert" {
-  private_key      = file("key.pem")
-  certificate_body = file("cert.pem")
-}
-
 resource "aws_lb_listener" "https_access" {
   load_balancer_arn = aws_lb.LoadBalancer.arn
   port              = "443"
   protocol          = "HTTPS"
-  certificate_arn = aws_acm_certificate.cert.arn
+  certificate_arn = var.certificateARN
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.lb_target_group.arn
@@ -1035,7 +1030,7 @@ resource "aws_lb_listener" "back_end" {
   load_balancer_arn = aws_lb.LoadBalancer.arn
   port              = "8080"
   protocol          = "HTTPS"
-  certificate_arn = aws_acm_certificate.cert.arn
+  certificate_arn = var.certificateARN
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.lb_target_group_2.arn
